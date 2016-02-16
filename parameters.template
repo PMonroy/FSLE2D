@@ -1,0 +1,21 @@
+#################################################################################
+# GENERAL PARAMETERS
+#################################################################################
+# vfield
+# 0 = MODEL FORECAST 1/12
+# 1 = ALTYMETRY AVISO 1/4
+vfield=0
+# Study domain (bl_lat, bl_lon, tr_lat,  tr_lon)
+# 1 = (30.2325,−5.955,45.8925,36.205)
+domainmin= 60 -50 
+# Intergrid longitudinal (in decimal degree)
+intergrid= 0.08333 0.08333
+domainmax= 80 -30
+# seeddate = seed date of tracers (dd-mm-yyyy)
+seeddate= 29-10-2014
+# Integration time step (in days)
+intstep=0.25
+# Integration time
+tau=180
+# Deltamax
+deltamax=50000.0
