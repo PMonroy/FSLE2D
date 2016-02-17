@@ -15,44 +15,38 @@ using namespace std;
 
 static const int NC_ERR = 2;
 
-char velocitydir[] = "/net/argos/data/peps/dflod/data/FSLEz/MODEL_FORECAST/netcdf/";
-int nvlon, nvlat;
-double *vlon, *vlat;
-vectorXY ***vflow;
-
 struct  vectorIJ {
     int i;
     int j;
 };
 
-// FLOW MODEL VARIABLES 
-
+//GLOBAL VARIABLES
+int nvlon, nvlat;
+vector <double> vlon; 
+vector <double> vlat;
+//vectorXY ***vflow;
+vector<vector<vector<vectorXY> > > vflow;
+// FLOW MODEL PARAMETERS
 struct velocitymodel {  
   string dir;
   string slatdim;
   string slondim;
   string slatvar;
   string slonvar;
-  double latstep;
-  double lonstep;
+  double latstep;//must be in degrees
+  double lonstep;//must be in degrees
   string svvar;
   string suvar;
-  double vfillvalue;
-  double ufillvalue;
-  double vscalefactor;
-  double uscalefactor;
+  double vscalefactor;// factor to get velocity in meters per day
+  double uscalefactor;// factor to get velocity in meters per day
+  double vfillvalue;// velocity meters per day
+  double ufillvalue;// velocity meters per day
 };
-
 enum vmodels { MYOCEAN,
 	       AVISO,
 	       NUMMODELS
 };
-
 velocitymodel vmodel[NUMMODELS];
-
-double degree_resolution=1.0/12.0;
-double FillValue = -32767.0*0.000610370188951492*secondsday;
-
 
 void loadparamsmodel(void )
 {
@@ -64,24 +58,23 @@ void loadparamsmodel(void )
   vmodel[MYOCEAN].slondim="longitude";
   vmodel[MYOCEAN].slatvar="latitude";
   vmodel[MYOCEAN].slonvar="longitude";
-  vmodel[MYOCEAN].latstep=1.0/12.0;
-  vmodel[MYOCEAN].lonstep=1.0/12.0;
+  vmodel[MYOCEAN].latstep=1.0/12.0;//must be in degrees
+  vmodel[MYOCEAN].lonstep=1.0/12.0;//must be in degrees
   vmodel[MYOCEAN].svvar="v";
   vmodel[MYOCEAN].suvar="u";
   
   vmodel[MYOCEAN].vscalefactor=0.000610370188951492;
-  vmodel[MYOCEAN].vscalefactor*=secondsday;// velocity meters per day
+  vmodel[MYOCEAN].vscalefactor*=secondsday;// factor to get velocity in meters per day
  
   vmodel[MYOCEAN].uscalefactor=0.000610370188951492;
-  vmodel[MYOCEAN].uscalefactor*=secondsday;// velocity meters per day
+  vmodel[MYOCEAN].uscalefactor*=secondsday;// factor to get velocity in meters per day
 
   vmodel[MYOCEAN].vfillvalue= -32767.0;
-  vmodel[MYOCEAN].vfillvalue*=vmodel[MYOCEAN].vscalefactor;
-  //vmodel[MYOCEAN].vfillvalue*=secondsday;// velocity meters per day
+  vmodel[MYOCEAN].vfillvalue*=vmodel[MYOCEAN].vscalefactor;// velocity meters per day
 
   vmodel[MYOCEAN].ufillvalue= -32767.0;
-  vmodel[MYOCEAN].ufillvalue*=vmodel[MYOCEAN].uscalefactor;
-  //vmodel[MYOCEAN].ufillvalue*=secondsday;// velocity meters per day
+  vmodel[MYOCEAN].ufillvalue*=vmodel[MYOCEAN].uscalefactor;// velocity meters per day
+
   
   /**************************************
    * AVISO PARAMETERS
@@ -91,31 +84,28 @@ void loadparamsmodel(void )
   vmodel[AVISO].slondim="lon";
   vmodel[AVISO].slatvar="lat";
   vmodel[AVISO].slonvar="lon";
-  vmodel[AVISO].latstep=0.25;//must be in DEGREES
-  vmodel[AVISO].lonstep=0.25;//must be in DEGREES
+  vmodel[AVISO].latstep=0.25;//must be in degrees
+  vmodel[AVISO].lonstep=0.25;//must be in degrees
   vmodel[AVISO].svvar="v";
   vmodel[AVISO].suvar="u";
 
   vmodel[AVISO].vscalefactor= 0.0001;
-  vmodel[AVISO].vscalefactor*=secondsday;
+  vmodel[AVISO].vscalefactor*=secondsday;// factor to get velocity in meters per day
 
   vmodel[AVISO].uscalefactor= 0.0001;
-  vmodel[AVISO].uscalefactor*=secondsday;
+  vmodel[AVISO].uscalefactor*=secondsday;// factor to get velocity in meters per day
 
   vmodel[AVISO].vfillvalue= -2147483647.0;
-  vmodel[AVISO].vfillvalue*=vmodel[AVISO].vscalefactor;
-  //vmodel[AVISO].vfillvalue*=secondsday;// velocity meters per day
-
+  vmodel[AVISO].vfillvalue*=vmodel[AVISO].vscalefactor;// velocity meters per day
+ 
   vmodel[AVISO].ufillvalue= -2147483647.0;
-  vmodel[AVISO].ufillvalue*=vmodel[AVISO].uscalefactor;
-  //vmodel[AVISO].ufillvalue*=secondsday;
-
+  vmodel[AVISO].ufillvalue*=vmodel[AVISO].uscalefactor;// velocity meters per day
+ 
 }
 
 int loadvgrid(struct tm rdate, int vfield)
 {
   
-
   char ncfile[256];
   NcError err(NcError::verbose_nonfatal);
 
@@ -135,7 +125,6 @@ int loadvgrid(struct tm rdate, int vfield)
     return NC_ERR;
   nvlon = nvlonDim->size();
 
-
   NcDim *nvlatDim;
   if (!(nvlatDim = dataFile.get_dim(vmodel[vfield].slatdim.c_str())))
     return NC_ERR;
@@ -145,62 +134,54 @@ int loadvgrid(struct tm rdate, int vfield)
   if (!(vlonVar = dataFile.get_var(vmodel[vfield].slonvar.c_str())))
     return NC_ERR;
 
-  NcVar  *vlatVar;
+  NcVar *vlatVar;
   if (!(vlatVar = dataFile.get_var(vmodel[vfield].slatdim.c_str())))
     return NC_ERR;
 
-  vlon = new double [nvlon];
-  vlat = new double [nvlat];
+  vlon.resize(nvlon);
+  vlat.resize(nvlat);
 
   // Get the lat/lon data from the nc file.
-  if (!vlonVar->get(vlon, nvlon))
+  if (!vlonVar->get(&vlon[0], nvlon))
     return NC_ERR;
 
-  if (!vlatVar->get(vlat, nvlat))
+  if (!vlatVar->get(&vlat[0], nvlat))
     return NC_ERR;
 
   return 0;
-}
-
-void freevgrid(void)
-{
-  delete[] vlon;
-  delete[] vlat;
 }
 
 int loadvflow(struct tm seeddate, int ntime, int vfield)
 {
 
   struct tm *date = {0};
-  // time_t: "unsigned int" value representing the number of seconds elapsed since 00:00 hours, Jan 1, 1970 UTC
-  time_t seedtime, time; 
+  time_t seedtime, time; // datein seconds UTC
   char ncfile[256];
   NcVar *uVar, *vVar;
 
   int i,j,k;
   int t;
-  double *ubuffer,*vbuffer;
+  long int *ubuffer,*vbuffer;
   int nv = nvlat*nvlon;
 
+  // Dynamically allocate buffer variables needed to extract v field
+  ubuffer = new long int [nv];
+  vbuffer = new long int [nv];
+
   // Dynamically allocate velocity fields
-
-  ubuffer = new double [nv];
-  vbuffer = new double [nv];
-
-  vflow = new vectorXY ** [ntime];
-  for(k=0; k<ntime; k++)
+  vflow.resize(ntime);
+  for(k = 0; k < ntime; k++) 
     {
-      vflow[k] = new vectorXY *[nvlat];
-      for(j=0; j<nvlon; j++)
+      vflow[k].resize(nvlat);
+      for(j = 0; j < nvlat; j++) 
 	{
-	  vflow[k][j] = new vectorXY [nvlon];
+	  vflow[k][j].resize(nvlon);
 	}
     }
 
-
-  // Get the lat/lon data from the
+  // Get the lat/lon data from the nc file
   seedtime = mktime(&seeddate); // convert date to time in seconds    
-  for(t=0; t<ntime; t++)                                                    
+  for(t=0; t<ntime; t++)  
     {
       time = seedtime + t*secondsday;                                  
       date = gmtime(&time);
@@ -208,9 +189,7 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
       sprintf(ncfile, "%s%04d-%02d-%02d.nc",vmodel[vfield].dir.c_str(),date->tm_year, date->tm_mon+1, date->tm_mday);
       NcFile dataFile(ncfile, NcFile::ReadOnly);
 
-
       //verbose
-
       cout << "reading nc file: " << ncfile <<endl;
 
       // Check to see if the file was opened.
@@ -241,9 +220,9 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 	  if (!vVar->set_cur(0, 0, 0))
 	    return NC_ERR;
 	  
-	  if (!uVar->get(&ubuffer[0], 1, nvlat, nvlon))
+	  if (!uVar->get(ubuffer, 1, nvlat, nvlon))
 	    return NC_ERR;
-	  if (!vVar->get(&vbuffer[0], 1, nvlat, nvlon))
+	  if (!vVar->get(vbuffer, 1, nvlat, nvlon))
 	    return NC_ERR;
 	}
       for(int q=0; q<nv; q++)
@@ -251,59 +230,46 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 	  j = (int) (q/nvlon);
 	  i = (q - j*nvlon);
 
-	  vflow[t][j][i].x= ubuffer[q] * vmodel[vfield].uscalefactor;
-	  vflow[t][j][i].y= vbuffer[q] * vmodel[vfield].vscalefactor;
+	  vflow[t][j][i] = 
+	    vectorXY((double) *(ubuffer + q) * vmodel[vfield].uscalefactor,
+		     (double) *(vbuffer + q) * vmodel[vfield].vscalefactor);
 	}
     }
 
   delete[] ubuffer;
   delete[] vbuffer;
 
-   ofstream vfile("velocities.vtk");
-      
-      vfile<<"# vtk DataFile Version 3.0"<<endl;
-      vfile<<"Complete data GLORY"<<endl; 
-      vfile<<"ASCII"<<endl;
-      vfile<<"DATASET STRUCTURED_GRID"<<endl;
-      vfile<<"DIMENSIONS "<< nvlon <<" "<< nvlat <<" "<<1<<endl;
-      vfile<<"POINTS "<< nvlon*nvlat <<" float"<<endl;
-      
-      for(int j=0;j<nvlat;j++) 
+  ofstream vfile("velocities.vtk");
+  
+  vfile<<"# vtk DataFile Version 3.0"<<endl;
+  vfile<<"Complete data GLORY"<<endl; 
+  vfile<<"ASCII"<<endl;
+  vfile<<"DATASET STRUCTURED_GRID"<<endl;
+  vfile<<"DIMENSIONS "<< nvlon <<" "<< nvlat <<" "<<1<<endl;
+  vfile<<"POINTS "<< nvlon*nvlat <<" float"<<endl;
+  
+  for(int j=0;j<nvlat;j++) 
+    {
+      for(int i=0;i<nvlon;i++) 
 	{
-	  for(int i=0;i<nvlon;i++) 
-	    {
-	      vfile << vlon[i] <<" "<< vlat[j]<<" "<< 0.0 <<endl;
-	    }
+	  vfile << vlon[i] <<" "<< vlat[j]<<" "<< 0.0 <<endl;
 	}
-      vfile<<endl;
-      vfile<<"POINT_DATA "<< nvlon*nvlat <<endl;
-      vfile<<"VECTORS velocity float"<<endl;
-      for(int j=0;j<nvlat;j++) 
-	{
-	  for(int i=0;i<nvlon;i++)
-	    {	
-	      vfile<<vflow[ntime-1][j][i].x<<" ";
-	      vfile<<vflow[ntime-1][j][i].y<<" ";
-	      vfile<<0.0<<endl;
-	    }
+    }
+  vfile<<endl;
+  vfile<<"POINT_DATA "<< nvlon*nvlat <<endl;
+  vfile<<"VECTORS velocity float"<<endl;
+  for(int j=0;j<nvlat;j++) 
+    {
+      for(int i=0;i<nvlon;i++)
+	{	
+	  vfile<<vflow[ntime-1][j][i].x<<" ";
+	  vfile<<vflow[ntime-1][j][i].y<<" ";
+	  vfile<<0.0<<endl;
 	}
-      vfile.close();
-
+    }
+  vfile.close();
     
   return 0;
-}
-
-void freevflow(int ntime)
-{
-  for (int i = 0; i < ntime; i++)
-    {
-      for (int j = 0; j < nvlat; j++)
-        {
-          delete[] vflow[i][j];
-        }
-      delete[] vflow[i];                                              
-    }                  
-  delete[] vflow;
 }
 
 int GetIndices(vectorXY point, vectorIJ *index, int vfield)

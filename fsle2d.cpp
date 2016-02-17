@@ -13,8 +13,6 @@ using namespace std;
 #include "vflow.h" 
 #include "integration.h"
 
-
-
 int (*velocity)(double ,vectorXY , vectorXY* );
 
 int main(int argc, char **argv)
@@ -62,11 +60,13 @@ int main(int argc, char **argv)
    **********************************************/
   vector<vectorXY> grid;
   int ni,nj;
+
   if(gridfsle2d(&grid, &ni, &nj, domainmin, intergrid, domainmax))
     {
       cout << "Error in contruction grid" << endl;
       return 1;
     }
+
   if(verbose == 1)
     {
       cout << "GRID CONSTRUCTION: "<<endl; 
@@ -80,10 +80,8 @@ int main(int argc, char **argv)
   neighbor.reserve(4*grid.size());
   neighbor = neighbors(ni, nj);
 
-
-
   /**********************************************
-   * INITIAL relative distances
+   * COMPUTE INITIAL SEPARATION
    **********************************************/
 
   vectorXY delta,scalefactor;
@@ -97,7 +95,7 @@ int main(int argc, char **argv)
       p=4*q;
       for(int dir=0; dir<4; dir++)
 	{
-	  if(neighbor[p+dir]>=0)
+	  if(neighbor[p+dir]!=-1)
 	    {
 	      delta=grid[neighbor[p+dir]]-grid[q];
 	      
@@ -126,11 +124,11 @@ int main(int argc, char **argv)
   vector<int> qcore;
   vector<int> qflag;
 
+  //Reserve memory to improve efficiency
   exit_time.reserve(grid.size());
   response.reserve(grid.size());
   qcore.reserve(grid.size());
   qflag.reserve(grid.size());
-
 
   for(unsigned int q=0; q<grid.size(); q++)
     {
@@ -138,7 +136,7 @@ int main(int argc, char **argv)
       if(neighbor[p]!=-1 && neighbor[p+1]!=-1 && neighbor[p+2]!=-1 && neighbor[p+3]!=-1)
 	{
 	  qflag.push_back(1);// Initially we can compute fsle in this points (4=num. neighbours)
-	  qcore.push_back(q);
+	  qcore.push_back(q);// qcore contains all the index of the later points
 	}
       else
 	{
@@ -150,19 +148,19 @@ int main(int argc, char **argv)
     }
 
   /**********************************************
-   * TIME LOOP
+   * SETUP TIME PARAMETERS
    **********************************************/
 
-  //Setup time parameters
-  int ntime = abs(tau);
   struct tm *inidate = {0};
+
   double tstart;
   double tend;
   double h;
-  int ascnd;
 
-  ascnd = tau > 0;
-  time_t seedtime = mktime(&seeddate); // convert date to time in seconds 
+  int ntime = abs(tau);
+  int ascnd = tau > 0;
+  time_t seedtime = mktime(&seeddate); // Convert date to time in seconds (UTC) 
+
   if(ascnd)
     {
       time_t initime = seedtime;
@@ -181,42 +179,45 @@ int main(int argc, char **argv)
     }
 
 
-  // Load velocity grid
-  cout << "Loading grid:";
-  if(loadvgrid(seeddate,vfield)!=0)
+  /**********************************************
+   * LOAD VELOCITY FIELD
+   **********************************************/
+
+  cout << "Loading grid:" << endl;
+  if(loadvgrid(seeddate,vfield)!=0)  // Load velocity grid
     {
-      cout << " Error in reading grid from nc" << endl;
+      cout << "***** Error reading grid" << endl;
       return 1;
     }
-  cout << " (Complete)"<<endl;
+  cout << "[Complete]" << endl;
 
-  // Load velocity field
-  cout << "Loading velocities:";
-  if(loadvflow(*inidate, ntime+2, vfield)!=0)
+
+  cout << "Loading velocities:" << endl;
+  if(loadvflow(*inidate, ntime+2, vfield)!=0)  // Load velocity field
     {
-      cout << "Error in reading velocities"<< endl;
+      cout << "***** Error reading velocities"<< endl;
       return 1;
     }
-  cout << "(Complete)"<<endl;
+  cout << "[Complete]"<<endl;
 
-  double t;
-  int count;
+  /**********************************************
+   * TIME LOOP
+   **********************************************/
   
-  vector<vectorXY> tracer;
-  tracer = grid;
-  
-  vector<double> length;
-  length = ilength;
-  
+  vector<vectorXY> tracer = grid;  
+  vector<double> length = ilength;
+
   double lengthmax;
   int dirmax;
   
   int q0, q1, q2, q3; 
   int qdir;
 
-  cout << "Calculation of response and exit_time:" << endl;
+  unsigned int count;
+  double t;
 
-  for(t=tstart,count=0; ascnd==1?(t<tend):(t>=tend); t+=h,count++)
+  cout << "Calculation of response and exit_time:" << endl;
+  for(t=tstart, count=0; ascnd==1?(t<tend):(t>=tend); t+=h,count++)
      {
 
        cout << "count=" << count << "(" <<(tend-tstart)/h <<")"<<endl;
@@ -233,11 +234,11 @@ int main(int argc, char **argv)
 	   if(qflag[q]==-1)
 	       continue;// skip the rest of the loop if q is a non-integrable point 
 	     
-	   if((qflag[q]=1) ||
-	      (q0!=-1 && qflag[q0]=1) ||
-	      (q1!=-1 && qflag[q1]=1) ||
-	      (q2!=-1 && qflag[q2]=1) ||
-	      (q3!=-1 && qflag[q3]=1))
+	   if((qflag[q]==1) ||
+	      (q0!=-1 && qflag[q0]==1) ||
+	      (q1!=-1 && qflag[q1]==1) ||
+	      (q2!=-1 && qflag[q2]==1) ||
+	      (q3!=-1 && qflag[q3]==1))
 	     {
 	       if(RK4(t, h, &tracer[q], getvflow, vfield)==1)
 		 {
@@ -249,6 +250,7 @@ int main(int argc, char **argv)
 		 }
 	     }
 	 }
+
        /* Compute the relative distances */
        for(unsigned int q=0; q<tracer.size(); q++)
 	 {
@@ -256,7 +258,10 @@ int main(int argc, char **argv)
 	   for(int dir=0; dir<2; dir++)
 	     {
 	       qdir = neighbor[p+dir];
-	       if((qflag[q]>0 && qdir>=0) || (qdir>=0 && qflag[qdir]>0))
+	       if(qdir==-1) // if grid point hasn't neighbour in direction dir,
+		 continue;  // jump to the next step in the loop
+
+	       if(qflag[q]==1 || qflag[qdir]==1)
 		 {
 		   delta=tracer[qdir]-tracer[q];
 		   
@@ -278,21 +283,16 @@ int main(int argc, char **argv)
        /* Compute the max length*/
        for(unsigned int q=0; q<tracer.size(); q++)
 	 {
-	   if(qflag[q]>0)
+	   if(qflag[q]==1)
 	     {
 	       p=4*q;
-	       lengthmax=length[p];
-	       for(int dir=0; dir<2; dir++)
+	       lengthmax=length[p];// May we initialize lengthmax before?
+	       for(int dir=1; dir<4; dir++)
 		 {
 		   if(length[p+dir]>lengthmax)
 		     {
-		       lengthmax=length[p+1];
+		       lengthmax=length[p+dir];
 		       dirmax=dir;
-		     }
-		   if(length[p+dir+2]>lengthmax)
-		     {
-		       lengthmax=length[p+dir+2];
-		       dirmax=dir+2;
 		     }
 		 }
 
@@ -305,15 +305,7 @@ int main(int argc, char **argv)
 	     }
 	 }
      }
-
-  cout << "(Complete)" << endl;
-
-  /****************
-   * FREE MEMORY
-   ****************/
-
-  //freevgrid();
-  //freevflow(ntime+2);
+  cout << "[Complete]" << endl;
 
   /**********************************************************
    * COMPUTE FINITE SIZE LYAPUNOV EXPONENT
