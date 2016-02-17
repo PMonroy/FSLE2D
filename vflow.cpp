@@ -312,18 +312,14 @@ int GetIndices(vectorXY point, vectorIJ *index, int vfield)
   index->i = floor((point.x-vlon[0])/vmodel[vfield].lonstep);
 
   if(index->i < 0 || index->i >= (nvlon-1))
-    {
-      cout << point.x <<" "<<vlon[0]<<endl;
       return 1;
-    }
+
   /* Locate index latitude*/
   index->j = floor((point.y-vlat[0])/vmodel[vfield].latstep);
 
   if(index->j < 0 || index->j >= (nvlat-1))
-    {
-      cout << point.y <<" "<<vlat[0]<<endl;
       return 1;
-    }
+
   return 0;
 }
 
@@ -344,10 +340,8 @@ int getvflow(double t,vectorXY point, vectorXY *vint, int vfield)
   time = (unsigned long) t;
 
   if(GetIndices(point, &index, vfield)==1)
-    {
-      cout << "outbonds" << endl;
       return 1;
-    }
+
   /* Vectors and points with only one int index*/
   q=0;  
   for(deltatime=0; deltatime<2; deltatime++)
@@ -365,8 +359,7 @@ int getvflow(double t,vectorXY point, vectorXY *vint, int vfield)
 	      vcomp[q] = vflow[k][j][i];
 
 	      /* COAST CHECKING!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
-	      if(vcomp[q].x <= vmodel[vfield].ufillvalue ||
-		 vcomp[q].y <= vmodel[vfield].vfillvalue)
+	      if(vcomp[q].x == vmodel[vfield].ufillvalue || vcomp[q].y == vmodel[vfield].vfillvalue)
 		  return 1;
 
 	      q++; 

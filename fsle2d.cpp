@@ -135,14 +135,14 @@ int main(int argc, char **argv)
   for(unsigned int q=0; q<grid.size(); q++)
     {
       p=4*q;
-      if(neighbor[p]>=0 && neighbor[p+1]>=0 && neighbor[p+2]>=0 && neighbor[p+3]>=0)
+      if(neighbor[p]!=-1 && neighbor[p+1]!=-1 && neighbor[p+2]!=-1 && neighbor[p+3]!=-1)
 	{
-	  qflag.push_back(1);
+	  qflag.push_back(1);// Initially we can compute fsle in this points (4=num. neighbours)
 	  qcore.push_back(q);
 	}
       else
 	{
-	  qflag.push_back(-1);	  
+	  qflag.push_back(0); // Border points: we can not compute fsle on it (4>num. neighbours)
 	}
 
       response.push_back(1.0);
@@ -224,26 +224,28 @@ int main(int argc, char **argv)
        /* Compute the position of tracer in time t=t+h*/
        for (unsigned int q = 0; q<tracer.size() ; q++)
 	 {
-	   //index four neighboirs
+	   //index of four q-neighboirs
 	   q0 = neighbor[4*q];
 	   q1 = neighbor[4*q+1];
 	   q2 = neighbor[4*q+2];
 	   q3 = neighbor[4*q+3];
 	   
-	   
-	   if((qflag[q]>0) ||
-	      (q0>=0 && qflag[q0]>0) ||
-	      (q1>=0 && qflag[q1]>0) ||
-	      (q2>=0 && qflag[q2]>0) ||
-	      (q3>=0 && qflag[q3]>0) )
+	   if(qflag[q]==-1)
+	       continue;// skip the rest of the loop if q is a non-integrable point 
+	     
+	   if((qflag[q]=1) ||
+	      (q0!=-1 && qflag[q0]=1) ||
+	      (q1!=-1 && qflag[q1]=1) ||
+	      (q2!=-1 && qflag[q2]=1) ||
+	      (q3!=-1 && qflag[q3]=1))
 	     {
 	       if(RK4(t, h, &tracer[q], getvflow, vfield)==1)
 		 {
-		   qflag[q]=-1;
-		   if(q0>=0) qflag[q0]*=-1;
-		   if(q1>=0) qflag[q1]*=-1;
-		   if(q2>=0) qflag[q2]*=-1;
-		   if(q3>=0) qflag[q3]*=-1;
+		   qflag[q]=-1; // q is a non-integrable grid point
+		   if(q0!=-1 && qflag[q0]!=-1) qflag[q0]=0;// We keep non-integrable neighbour grid points
+		   if(q1!=-1 && qflag[q1]!=-1) qflag[q1]=0;
+		   if(q2!=-1 && qflag[q2]!=-1) qflag[q2]=0;
+		   if(q3!=-1 && qflag[q3]!=-1) qflag[q3]=0;
 		 }
 	     }
 	 }
