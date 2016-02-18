@@ -4,6 +4,8 @@
 #include <fstream>
 #include <cmath>
 #include <vector>
+#include <sstream>
+#include <iomanip> // setfill, setw
 
 using namespace std;
 
@@ -13,7 +15,10 @@ using namespace std;
 #include "vflow.h" 
 #include "integration.h"
 
-int (*velocity)(double ,vectorXY , vectorXY* );
+// Maybe one day I use this:
+//int (*velocity)(double ,vectorXY , vectorXY* ); 
+
+string numprintf(int ndigits, int ndecimals, double number);
 
 int main(int argc, char **argv)
 {
@@ -63,7 +68,7 @@ int main(int argc, char **argv)
 
   if(gridfsle2d(&grid, &ni, &nj, domainmin, intergrid, domainmax))
     {
-      cout << "Error in contruction grid" << endl;
+      cout << "*****Error in contruction grid" << endl;
       return 1;
     }
 
@@ -182,23 +187,24 @@ int main(int argc, char **argv)
   /**********************************************
    * LOAD VELOCITY FIELD
    **********************************************/
+  if(verbose == 1) cout << "Loading grid:" << endl;
 
-  cout << "Loading grid:" << endl;
   if(loadvgrid(seeddate,vfield)!=0)  // Load velocity grid
     {
       cout << "***** Error reading grid" << endl;
       return 1;
     }
-  cout << "[Complete]" << endl;
 
+  if(verbose == 1) cout << "[Complete]" << endl;
 
-  cout << "Loading velocities:" << endl;
+  if(verbose == 1) cout << "Loading velocities:" << endl;
+
   if(loadvflow(*inidate, ntime+2, vfield)!=0)  // Load velocity field
     {
       cout << "***** Error reading velocities"<< endl;
       return 1;
     }
-  cout << "[Complete]"<<endl;
+  if(verbose == 1) cout << "[Complete]"<<endl;
 
   /**********************************************
    * TIME LOOP
@@ -216,11 +222,12 @@ int main(int argc, char **argv)
   unsigned int count;
   double t;
 
-  cout << "Calculation of response and exit_time:" << endl;
+  if(verbose == 1) cout << "Calculation of response and exit_time:" << endl;
+
   for(t=tstart, count=0; ascnd==1?(t<tend):(t>=tend); t+=h,count++)
      {
 
-       cout << "count=" << count << "(" <<(tend-tstart)/h <<")"<<endl;
+       if(verbose == 1) cout << "count=" << count << "(" <<(tend-tstart)/h <<")"<<endl;
 
        /* Compute the position of tracer in time t=t+h*/
        for (unsigned int q = 0; q<tracer.size() ; q++)
@@ -305,7 +312,7 @@ int main(int argc, char **argv)
 	     }
 	 }
      }
-  cout << "[Complete]" << endl;
+  if(verbose==1)  cout << "[Complete]" << endl;
 
   /**********************************************************
    * COMPUTE FINITE SIZE LYAPUNOV EXPONENT
@@ -319,36 +326,112 @@ int main(int argc, char **argv)
       fsle.push_back(log(response[qcore[q]])/exit_time[qcore[q]]);
     }
 
+  // Save fsle 2d grid in a file
+  string nfilegridfsle2d = 
+    "fsle2d-dmin" + numprintf(4,0,domainmin.x) +
+    "_"            + numprintf(4,0,domainmin.y) +
+    "_dmax"       + numprintf(4,0,domainmax.x) +
+    "_"            + numprintf(4,0,domainmax.y) +
+    "_res"        + numprintf(4,3,intergrid.x) +
+    "_"            + numprintf(4,3,intergrid.y) +
+    ".grid";
+  ofstream ofilegridfsle2d(nfilegridfsle2d.c_str());
+
+  if(verbose==1) cout << "Save grid in file: " << nfilegridfsle2d <<endl;
+
+  for(unsigned int q=0; q<qcore.size(); q++) 
+    {
+      ofilegridfsle2d<<grid[q].x<<" "<<grid[q].y<<endl;
+    }
+  ofilegridfsle2d.close();
+
+  if(verbose==1) cout << "[Complete]" << endl;
+
+  // save fsle 2d values in a file
+  string nfilefsle2d = 
+    "fsle2d_vm"   + numprintf(1,0,vfield) +
+    "_dmin"       + numprintf(4,0,domainmin.x) +
+    "_"           + numprintf(4,0,domainmin.y) +
+    "_dmax"       + numprintf(4,0,domainmax.x) +
+    "_"           + numprintf(4,0,domainmax.y) +
+    "_res"        + numprintf(4,3,intergrid.x) +
+    "_"           + numprintf(4,3,intergrid.y) +
+    "_tau"        + numprintf(4,0,tau) +
+    "_h"          + numprintf(4,3,intstep) +
+    "_date"       + numprintf(2,0,seeddate.tm_year) + 
+    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
+    "-"           + numprintf(2,0,seeddate.tm_mday) +
+    "_dmax"       + numprintf(3,0, deltamax/1000.0) +
+    ".data";
+
+  if(verbose==1) cout << "Save fsle values in file: " << nfilefsle2d <<endl;
+
+  ofstream ofilefsle2d(nfilefsle2d.c_str());
+  for(unsigned int q=0; q<fsle.size(); q++) 
+    {
+      ofilefsle2d<<fsle[q]<<endl;
+    }  
+  ofilefsle2d.close();
+
+  if(verbose==1)  cout << "[Complete]" << endl;
+
+
  /**********************************************************
    * WRITING RESULT IN VTK FILE
    **********************************************************/
-  ofstream ofile("fsle_debug.vtk");
 
-  ofile<<"# vtk DataFile Version 3.0"<<endl;
-  ofile<<"Complete vector field of ROMS Benguela"<<endl; 
-  ofile<<"ASCII"<<endl;
-  ofile<<"DATASET STRUCTURED_GRID"<<endl;
-  ofile<<"DIMENSIONS "<< ni-2 <<" "<< nj-2 <<" "<< 1 <<endl;
-  ofile<<"POINTS "<< (ni-2)*(nj-2) <<" float"<<endl;
-  for(unsigned int q=0; q<qcore.size(); q++) 
-    {
-      ofile<<grid[qcore[q]].x<<" "<<grid[qcore[q]].y<<" "<< 0.0 <<endl;
-    }
-  ofile<<endl;
-  ofile<<"POINT_DATA "<<(ni-2)*(nj-2)<<endl;
-  ofile<<"SCALARS fsle float"<<endl;
-  ofile<<"LOOKUP_TABLE default"<<endl;
+  string vtkfilefsle2d = 
+    "fsle2d_vm"   + numprintf(1,0,vfield) +
+    "_dmin"       + numprintf(4,0,domainmin.x) +
+    "_"           + numprintf(4,0,domainmin.y) +
+    "_dmax"       + numprintf(4,0,domainmax.x) +
+    "_"           + numprintf(4,0,domainmax.y) +
+    "_res"        + numprintf(4,3,intergrid.x) +
+    "_"           + numprintf(4,3,intergrid.y) +
+    "_tau"        + numprintf(4,0,tau) +
+    "_h"          + numprintf(4,3,intstep) +
+    "_date"       + numprintf(2,0,seeddate.tm_year) + 
+    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
+    "-"           + numprintf(2,0,seeddate.tm_mday) +
+    "_dmax"       + numprintf(3,0, deltamax/1000.0) +
+    ".vtk";
+
+  if(verbose==1)  cout << "Save ftle field in vtk file: " << vtkfilefsle2d <<endl;
+
+  ofstream vtkfile(vtkfilefsle2d.c_str());
+  vtkfile<<"# vtk DataFile Version 3.0"<<endl;
+  vtkfile<<"Finite size Lyapunov exponent 2D"<<endl; 
+  vtkfile<<"ASCII"<<endl;
+  vtkfile<<"DATASET STRUCTURED_POINTS"<< endl;
+  vtkfile<<"DIMENSIONS "<< ni-2 <<" "<< nj-2 <<" "<< 1 <<endl;
+  vtkfile<<"ORIGIN "<<grid[qcore[0]].x<<" "<<grid[qcore[0]].y<<" "<< 0.0 <<endl;
+  vtkfile<<"SPACING "<<intergrid.x<<" "<<intergrid.y<<" "<< 0.0 <<endl;
+  vtkfile<<"POINT_DATA "<<(ni-2)*(nj-2)<<endl;
+  vtkfile<<"SCALARS fsle2d double"<<endl;
+  vtkfile<<"LOOKUP_TABLE default"<<endl;
   for(unsigned int q=0; q<fsle.size(); q++) 
     {
-      ofile<<fsle[q]<<endl;
+      vtkfile<<fsle[q]<<endl;
     }
-  ofile<<"SCALARS qflag int"<<endl;
-  ofile<<"LOOKUP_TABLE default"<<endl;
+  vtkfile<<"SCALARS qflag int"<<endl;
+  vtkfile<<"LOOKUP_TABLE default"<<endl;
   for(unsigned int q=0; q<qcore.size(); q++) 
     {
-      ofile<<qflag[qcore[q]]<<endl;
+      vtkfile<<qflag[qcore[q]]<<endl;
     }
+  vtkfile.close();
+
+  if(verbose==1)  cout << "[Complete]" <<endl;
 
   return 0;
 }
 
+string numprintf(int ndigits, int ndecimals, double number)
+{
+  ostringstream stream;// it needs to include <sstream>
+  double factor=pow(10,ndecimals); // it needs to include <cmath>
+  stream << fixed; //it needs to include <iostream>
+  stream << setfill('0') << setw(ndigits);
+  stream << setprecision(0) << internal<< (number*factor);
+  return stream.str();
+}

@@ -4,3 +4,5 @@ fsle2d
 *#
 *.vtk
 *.dat
+*.data
+*.grid

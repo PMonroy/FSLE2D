@@ -19,14 +19,20 @@ struct  vectorIJ {
     int i;
     int j;
 };
+//EXTERN VARIABLES
+extern int verbose;
 
 //GLOBAL VARIABLES
 int nvlon, nvlat;
 vector <double> vlon; 
 vector <double> vlat;
-//vectorXY ***vflow;
 vector<vector<vector<vectorXY> > > vflow;
+
 // FLOW MODEL PARAMETERS
+enum vmodels { MYOCEAN,
+	       AVISO,
+	       NUMMODELS
+};
 struct velocitymodel {  
   string dir;
   string slatdim;
@@ -41,10 +47,6 @@ struct velocitymodel {
   double uscalefactor;// factor to get velocity in meters per day
   double vfillvalue;// velocity meters per day
   double ufillvalue;// velocity meters per day
-};
-enum vmodels { MYOCEAN,
-	       AVISO,
-	       NUMMODELS
 };
 velocitymodel vmodel[NUMMODELS];
 
@@ -75,7 +77,6 @@ void loadparamsmodel(void )
   vmodel[MYOCEAN].ufillvalue= -32767.0;
   vmodel[MYOCEAN].ufillvalue*=vmodel[MYOCEAN].uscalefactor;// velocity meters per day
 
-  
   /**************************************
    * AVISO PARAMETERS
    *************************************/
@@ -109,7 +110,7 @@ int loadvgrid(struct tm rdate, int vfield)
   char ncfile[256];
   NcError err(NcError::verbose_nonfatal);
 
-  //loading parameters of the model
+  //Loading parameters of the model
   loadparamsmodel();
 
   // Open the first Netcdf file
@@ -155,20 +156,22 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 {
 
   struct tm *date = {0};
-  time_t seedtime, time; // datein seconds UTC
+  time_t seedtime, time; // Date in seconds UTC
   char ncfile[256];
   NcVar *uVar, *vVar;
 
   int i,j,k;
   int t;
-  long int *ubuffer,*vbuffer;
+
+  vector <long int> ubuffer;
+  vector <long int> vbuffer;
+
   int nv = nvlat*nvlon;
 
-  // Dynamically allocate buffer variables needed to extract v field
-  ubuffer = new long int [nv];
-  vbuffer = new long int [nv];
+  ubuffer.resize(nv);
+  vbuffer.resize(nv);
 
-  // Dynamically allocate velocity fields
+  // Dynamically allocate Velocity field
   vflow.resize(ntime);
   for(k = 0; k < ntime; k++) 
     {
@@ -179,7 +182,7 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 	}
     }
 
-  // Get the lat/lon data from the nc file
+  // Get the Velocity data from the nc file
   seedtime = mktime(&seeddate); // convert date to time in seconds    
   for(t=0; t<ntime; t++)  
     {
@@ -189,8 +192,8 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
       sprintf(ncfile, "%s%04d-%02d-%02d.nc",vmodel[vfield].dir.c_str(),date->tm_year, date->tm_mon+1, date->tm_mday);
       NcFile dataFile(ncfile, NcFile::ReadOnly);
 
-      //verbose
-      cout << "reading nc file: " << ncfile <<endl;
+      if(verbose==1)
+	cout << "Reading nc file: " << ncfile <<endl;
 
       // Check to see if the file was opened.
       if(!dataFile.is_valid())
@@ -220,26 +223,21 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 	  if (!vVar->set_cur(0, 0, 0))
 	    return NC_ERR;
 	  
-	  if (!uVar->get(ubuffer, 1, nvlat, nvlon))
+	  if (!uVar->get(&ubuffer[0], 1, nvlat, nvlon))
 	    return NC_ERR;
-	  if (!vVar->get(vbuffer, 1, nvlat, nvlon))
+	  if (!vVar->get(&vbuffer[0], 1, nvlat, nvlon))
 	    return NC_ERR;
 	}
       for(int q=0; q<nv; q++)
 	{
-	  j = (int) (q/nvlon);
-	  i = (q - j*nvlon);
-
-	  vflow[t][j][i] = 
-	    vectorXY((double) *(ubuffer + q) * vmodel[vfield].uscalefactor,
-		     (double) *(vbuffer + q) * vmodel[vfield].vscalefactor);
+	  j=(int) (q/nvlon);
+	  i=(q-j*nvlon);
+	  vflow[t][j][i]=vectorXY(((double) ubuffer[q])*vmodel[vfield].uscalefactor,
+				  ((double) vbuffer[q])*vmodel[vfield].vscalefactor);
 	}
     }
 
-  delete[] ubuffer;
-  delete[] vbuffer;
-
-  ofstream vfile("velocities.vtk");
+  /*  ofstream vfile("velocities.vtk");
   
   vfile<<"# vtk DataFile Version 3.0"<<endl;
   vfile<<"Complete data GLORY"<<endl; 
@@ -267,7 +265,7 @@ int loadvflow(struct tm seeddate, int ntime, int vfield)
 	  vfile<<0.0<<endl;
 	}
     }
-  vfile.close();
+    vfile.close();*/
     
   return 0;
 }
