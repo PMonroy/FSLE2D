@@ -350,17 +350,17 @@ int main(int argc, char **argv)
   // save fsle 2d values in a file
   string nfilefsle2d = 
     "fsle2d_vm"   + numprintf(1,0,vfield) +
-    "_dmin"       + numprintf(4,0,domainmin.x) +
-    "_"           + numprintf(4,0,domainmin.y) +
-    "_dmax"       + numprintf(4,0,domainmax.x) +
-    "_"           + numprintf(4,0,domainmax.y) +
+    "_date"       + numprintf(2,0,seeddate.tm_year) + 
+    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
+    "-"           + numprintf(2,0,seeddate.tm_mday) +
+    "_rlon"       + numprintf(4,0,domainmin.x) +
+    "_"           + numprintf(4,0,domainmax.x) +
+    "_rlat"       + numprintf(4,0,domainmin.y) +
+    "_"           + numprintf(4,0,domainmax.x) +
     "_res"        + numprintf(4,3,intergrid.x) +
     "_"           + numprintf(4,3,intergrid.y) +
     "_tau"        + numprintf(4,0,tau) +
     "_h"          + numprintf(4,3,intstep) +
-    "_date"       + numprintf(2,0,seeddate.tm_year) + 
-    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
-    "-"           + numprintf(2,0,seeddate.tm_mday) +
     "_dmax"       + numprintf(3,0, deltamax/1000.0) +
     ".data";
 
@@ -382,23 +382,23 @@ int main(int argc, char **argv)
 
   string vtkfilefsle2d = 
     "fsle2d_vm"   + numprintf(1,0,vfield) +
-    "_dmin"       + numprintf(4,0,domainmin.x) +
-    "_"           + numprintf(4,0,domainmin.y) +
-    "_dmax"       + numprintf(4,0,domainmax.x) +
-    "_"           + numprintf(4,0,domainmax.y) +
+    "_date"       + numprintf(2,0,seeddate.tm_year) + 
+    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
+    "-"           + numprintf(2,0,seeddate.tm_mday) +
+    "_rlon"       + numprintf(4,0,domainmin.x) +
+    "_"           + numprintf(4,0,domainmax.x) +
+    "_rlat"       + numprintf(4,0,domainmin.y) +
+    "_"           + numprintf(4,0,domainmax.x) +
     "_res"        + numprintf(4,3,intergrid.x) +
     "_"           + numprintf(4,3,intergrid.y) +
     "_tau"        + numprintf(4,0,tau) +
     "_h"          + numprintf(4,3,intstep) +
-    "_date"       + numprintf(2,0,seeddate.tm_year) + 
-    "-"           + numprintf(2,0,seeddate.tm_mon+1)+
-    "-"           + numprintf(2,0,seeddate.tm_mday) +
     "_dmax"       + numprintf(3,0, deltamax/1000.0) +
     ".vtk";
 
   if(verbose==1)  cout << "Save ftle field in vtk file: " << vtkfilefsle2d <<endl;
 
-  ofstream vtkfile(vtkfilefsle2d.c_str());
+  /*ofstream vtkfile(vtkfilefsle2d.c_str());
   vtkfile<<"# vtk DataFile Version 3.0"<<endl;
   vtkfile<<"Finite size Lyapunov exponent 2D"<<endl; 
   vtkfile<<"ASCII"<<endl;
@@ -419,7 +419,30 @@ int main(int argc, char **argv)
     {
       vtkfile<<qflag[qcore[q]]<<endl;
     }
-  vtkfile.close();
+    vtkfile.close();*/
+
+  ofstream vtkfile(vtkfilefsle2d.c_str());
+  vtkfile<<"# vtk DataFile Version 3.0"<<endl;
+  vtkfile<<"Finite size Lyapunov exponent 2D"<<endl; 
+  vtkfile<<"ASCII"<<endl;
+  vtkfile<<"DATASET STRUCTURED_POINTS"<< endl;
+  vtkfile<<"DIMENSIONS "<< ni-1 <<" "<< nj-1 <<" "<< 1 <<endl;
+  vtkfile<<"ORIGIN "<<grid[qcore[0]].x-(intergrid.x/2.0)<<" "<<grid[qcore[0]].y-(intergrid.y/2.0)<<" "<< 0.0 <<endl;
+  vtkfile<<"SPACING "<<intergrid.x<<" "<<intergrid.y<<" "<< 0.0 <<endl;
+  vtkfile<<"CELL_DATA "<<(ni-2)*(nj-2)<<endl;
+  vtkfile<<"SCALARS fsle2d double"<<endl;
+  vtkfile<<"LOOKUP_TABLE default"<<endl;
+  for(unsigned int q=0; q<fsle.size(); q++) 
+    {
+      vtkfile<<fsle[q]<<endl;
+    }
+  vtkfile<<"SCALARS qflag int"<<endl;
+  vtkfile<<"LOOKUP_TABLE default"<<endl;
+  for(unsigned int q=0; q<qcore.size(); q++) 
+    {
+      vtkfile<<qflag[qcore[q]]<<endl;
+    }
+    vtkfile.close();
 
   if(verbose==1)  cout << "[Complete]" <<endl;
 
