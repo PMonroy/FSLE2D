@@ -1,34 +1,54 @@
-CC_MONO=g++ -Wall -mcmodel=medium
+CPP=g++
+CPPFLAGS=-O2 -Wall
 
-CC=$(CC_MONO)
-
-LIBS= -lnetcdf_c++
+LDFLAGS= -lnetcdf_c++ 
 RM=rm -rf
 
-all: fsle2d
+DESTDIR=$(HOME)/bin
 
-readparameters.o: readparameters.cpp readparameters.h
-	$(CC) -c readparameters.cpp 
+common_src=  constants.cpp vflow.cpp vectorXY.cpp vectorIJ.cpp rparameters.cpp gridconstruction.cpp constants.cpp integration.cpp
+common_obj=$(common_src:.cpp=.o) 
+common_dep=$(common_obj:.o=.d)  # one dependency file for each source
 
-vectorXY.o: vectorXY.cpp vectorXY.h
-	$(CC) -c vectorXY.cpp 
+#RTIME2D 
+rtime2d_src= rtime2d.cpp
+rtime2d_obj=$(rtime2d_src:.cpp=.o) 
+rtime2d_dep=$(rtime2d_obj:.o=.d)  # one dependency file for each source
 
-constants.o: constants.cpp constants.h
-	$(CC) -c constants.cpp 
+#FSLE2D
+fsle2d_src= fsle2d.cpp
+fsle2d_obj=$(fsle2d_src:.cpp=.o) 
+fsle2d_dep=$(fsle2d_obj:.o=.d)  # one dependency file for each source
 
-gridconstruction.o: gridconstruction.cpp gridconstruction.h vectorXY.o
-	$(CC) -c gridconstruction.cpp
+.PHONY: all rtime2d fsle2d
 
-integration.o: integration.cpp integration.h vectorXY.o constants.o
-	$(CC) -c integration.cpp
+all: rtime2d fsle2d
 
-vflow.o: vflow.cpp vflow.h vectorXY.o constants.o
-	$(CC) -c vflow.cpp -lnetcdf_c++
+rtime2d: $(common_obj) $(rtime2d_obj)
+	$(CPP) -o $@ $^ $(LDFLAGS)
 
-fsle2d.o: fsle2d.cpp
-	$(CC) -c fsle2d.cpp 
+fsle2d: $(common_obj) $(fsle2d_obj)
+	$(CPP) -o $@ $^ $(LDFLAGS)
 
-fsle2d: fsle2d.o readparameters.o gridconstruction.o vflow.o constants.o vectorXY.o integration.o
-	$(CC)  fsle2d.o readparameters.o gridconstruction.o vflow.o integration.o constants.o vectorXY.o -o fsle2d -lnetcdf_c++
+-include $(common_dep) # include all dep files in makefile
+-include $(rtime2d_dep) 
+-include $(fsel2d_dep) 
+
+
+%.d: %.cpp 	# rule to generate a dep file by using the g++ prepocesor
+	$(CPP) $(CPPFLAGS) -MM -MT $(@:.d=.o) $< -MF $@
+
+%.o: %.cpp
+	$(CPP) $(CPPFLAGS) -o $@ -c $<
+
+.PHONY: debug rtime2d fsle2d
+debug: CPPFLAGS+= -DDEBUG -ggdb # debug with gdb
+debug: rtime2d fsle2d
+
+.PHONY: clean
 clean:
-	$(RM) *.o 
+	$(RM) $(common_obj) $(rtime2d_obj) $(fsle2d_obj) *.d *~ *# rtime2d fsle2d
+
+.PHONY: install
+install: rtime2d fsle2d
+	install $^ $(DESTDIR)

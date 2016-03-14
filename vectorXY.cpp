@@ -1,4 +1,4 @@
-#include "vectorXY.h"
+#include "vectorXY.hpp"
 
 vectorXY::vectorXY(void) { // Void Constructor
   x=0.0;

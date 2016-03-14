@@ -1,8 +1,13 @@
 *~
 *.o
+*.d
 fsle2d
+rtime2d
 *#
 *.vtk
 *.dat
 *.data
 *.grid
+*.ini
+*.conf
+*.backup
